@@ -19,7 +19,7 @@ MAINTAINER Dockerfiles
 # Install required packages and remove the apt packages cache when done.
 
 RUN apt-get update && \
-    apt-get upgrade -y && \ 
+    apt-get upgrade -y && \
     apt-get install -y \
 	git \
 	python \
@@ -35,23 +35,39 @@ RUN apt-get update && \
 # install uwsgi now because it takes a little while
 RUN pip install uwsgi
 
-# setup all the configfiles
-RUN echo "daemon off;" >> /etc/nginx/nginx.conf
-COPY nginx-app.conf /etc/nginx/sites-available/default
-COPY supervisor-app.conf /etc/supervisor/conf.d/
-
 # COPY requirements.txt and RUN pip install BEFORE adding the rest of your code, this will cause Docker's caching mechanism
 # to prevent re-installinig (all your) dependencies when you made a change a line or two in your app.
+COPY app/requirements.txt /tmp/
+RUN pip install -r /tmp/requirements.txt
 
-COPY app/requirements.txt /home/docker/code/app/
-RUN pip install -r /home/docker/code/app/requirements.txt
+# this allows to build different docker for each django application
+# but with shared volumes
+ARG APP_NAME=app
+ARG DOMAIN_NAME=$APP_NAME.docker.local
 
-# add (the rest of) our code
-COPY . /home/docker/code/
+# setup all the configfiles
+COPY supervisor-app.conf /etc/supervisor/conf.d/
+RUN echo "daemon off;" >> /etc/nginx/nginx.conf
+COPY nginx-app.conf /etc/nginx/sites-available/default
+RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/sites-available/default
+RUN sed -i "s/{DOMAIN_NAME}/$DOMAIN_NAME/g" /etc/nginx/sites-available/default
+
+# COPY uwsgi settings
+COPY uwsgi_params /etc/nginx/
+COPY uwsgi.ini /etc/nginx/
+RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/uwsgi.ini
+
+# COPY app code
+COPY app /srv/django/$APP_NAME
 
 # install django, normally you would remove this step because your project would already
 # be installed in the code/app/ directory
-RUN django-admin.py startproject website /home/docker/code/app/
+# RUN django-admin.py startproject website /home/docker/code/app/
+
+RUN mkdir -p /srv/django/$APP_NAME/media && \
+    mkdir -p /srv/django/$APP_NAME/static
+
+VOLUME ["/srv"]
 
 EXPOSE 80
 CMD ["supervisord", "-n"]
