@@ -44,30 +44,29 @@ RUN pip install -r /tmp/requirements.txt
 # but with shared volumes
 ARG APP_NAME=app
 ARG DOMAIN_NAME=$APP_NAME.docker.local
+ENV APP_NAME ${APP_NAME}
 
 # setup all the configfiles
 COPY supervisor-app.conf /etc/supervisor/conf.d/
 RUN echo "daemon off;" >> /etc/nginx/nginx.conf
 COPY nginx-app.conf /etc/nginx/sites-available/default
-RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/sites-available/default
-RUN sed -i "s/{DOMAIN_NAME}/$DOMAIN_NAME/g" /etc/nginx/sites-available/default
+RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/sites-available/default && \
+    sed -i "s/{DOMAIN_NAME}/$DOMAIN_NAME/g" /etc/nginx/sites-available/default
 
 # COPY uwsgi settings
 COPY uwsgi_params /etc/nginx/
 COPY uwsgi.ini /etc/nginx/
 RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/uwsgi.ini
 
-# COPY app code
-COPY app /srv/django/$APP_NAME
+# COPY the script executed the first boot to initialize the /srv folder
+# this step needs to be done an run since /srv should be mounted externally
+COPY initialize-srv.sh /usr/local/bin/
+RUN chmod 775 /usr/local/bin/initialize-srv.sh && \
+    chown www-data /usr/local/bin/initialize-srv.sh
 
-# install django, normally you would remove this step because your project would already
-# be installed in the code/app/ directory
-# RUN django-admin.py startproject website /home/docker/code/app/
+VOLUME /srv
 
-RUN mkdir -p /srv/django/$APP_NAME/media && \
-    mkdir -p /srv/django/$APP_NAME/static
-
-VOLUME ["/srv"]
+# TODO change from sed to envsubst
 
 EXPOSE 80
 CMD ["supervisord", "-n"]
