@@ -21,15 +21,16 @@ MAINTAINER Dockerfiles
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y \
-	git \
-	python \
-	python-dev \
-	python-setuptools \
-	python-pip \
-	nginx \
-	supervisor \
-	sqlite3 && \
-	pip install -U pip setuptools && \
+    gettext-base \
+    git \
+    python \
+    python-dev \
+    python-setuptools \
+    python-pip \
+    nginx \
+    supervisor \
+    sqlite3 && \
+    pip install -U pip setuptools && \
   	rm -rf /var/lib/apt/lists/*
 
 # install uwsgi now because it takes a little while
@@ -42,21 +43,22 @@ RUN pip install -r /tmp/requirements.txt
 
 # this allows to build different docker for each django application
 # but with shared volumes
-ARG APP_NAME=app
-ARG DOMAIN_NAME=$APP_NAME.docker.local
-ENV APP_NAME ${APP_NAME}
+ARG APP_NAME
+ARG DOMAIN_NAME
+ENV APP_NAME ${APP_NAME:-app}
+ENV DOMAIN_NAME ${DOMAIN_NAME:-django.docker.local}
 
 # setup all the configfiles
-COPY supervisor-app.conf /etc/supervisor/conf.d/
+COPY supervisor-app.conf /tmp/
+COPY nginx-app.conf /tmp/
 RUN echo "daemon off;" >> /etc/nginx/nginx.conf
-COPY nginx-app.conf /etc/nginx/sites-available/default
-RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/sites-available/default && \
-    sed -i "s/{DOMAIN_NAME}/$DOMAIN_NAME/g" /etc/nginx/sites-available/default
+RUN envsubst < /tmp/nginx-app.conf > /etc/nginx/sites-available/default  && \
+    envsubst < /tmp/supervisor-app.conf > /etc/supervisor/conf.d/supervisor-app.conf
 
 # COPY uwsgi settings
 COPY uwsgi_params /etc/nginx/
-COPY uwsgi.ini /etc/nginx/
-RUN sed -i "s/{APP_NAME}/$APP_NAME/g" /etc/nginx/uwsgi.ini
+COPY uwsgi.ini /tmp/
+RUN envsubst < /tmp/uwsgi.ini > /etc/nginx/uwsgi.ini
 
 # COPY the script executed the first boot to initialize the /srv folder
 # this step needs to be done an run since /srv should be mounted externally
