@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 # if app folder does not exists already
-# FIXME seems not to work
 if [[ ! -d /srv/$APP_NAME ]]; then
     touch /srv/$APP_NAME/media/PUT_HERE_YOUR_GENERATED_DATA
     touch /srv/$APP_NAME/static/PUT_HERE_YOUR_STATIC_DATA
